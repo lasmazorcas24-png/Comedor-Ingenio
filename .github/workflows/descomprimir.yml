@@ -1,0 +1,24 @@
+name: Descomprimir zip inicial
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  descomprimir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descomprimir y organizar
+        run: |
+          unzip -q Comedor-Ingenio.zip -d /tmp/ci
+          rm -rf /tmp/ci/Comedor-Ingenio/.git
+          cp -a /tmp/ci/Comedor-Ingenio/. .
+          rm Comedor-Ingenio.zip
+      - name: Commit y push
+        run: |
+          git config user.name "Comedor Ingenio"
+          git config user.email "dev@comedoringenio.local"
+          git add -A
+          git commit -m "docs: estructura inicial y arquitectura (fase 0)"
+          git push origin HEAD:main
+          git push origin HEAD:refs/heads/dev
