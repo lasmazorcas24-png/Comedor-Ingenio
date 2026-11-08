@@ -28,3 +28,21 @@ El ID de la hoja NO se guarda en el repositorio. Al copiar `backend/apps-script/
 - Cierre automático por inactividad en la pantalla de cocina.
 - Registro y bloqueo de dispositivos (hoja `dispositivos`).
 - Restablecer PIN de un usuario desde el perfil de socio.
+
+## Administración de usuarios (v0.2.0)
+Solo un **socio** con `es_admin = TRUE` en la hoja `usuarios` puede usar estas acciones.
+
+| Acción | Descripción |
+|---|---|
+| usuarios.listar | Usuarios y su estado (nunca PIN ni hash) |
+| usuarios.crear | Crea un usuario con PIN temporal aleatorio |
+| usuarios.restablecerPin | Genera PIN temporal, cierra sus sesiones y le exige cambiarlo |
+| usuarios.activar | Activa o desactiva (no puede desactivarse a sí mismo) |
+| auditoria.recientes | Últimos 60 registros de auditoría |
+
+- El PIN temporal se muestra una sola vez al administrador.
+- Un administrador no puede restablecer su propio PIN desde el panel.
+- Todo queda en `auditoria`: usuario.creado, pin.restablecido, usuario.activado, usuario.desactivado.
+
+## Recuperación de acceso (emergencia)
+Si nadie puede entrar, el dueño de la cuenta de Google ejecuta desde el editor de Apps Script `recuperar_<Nombre>` (genera un PIN temporal y lo muestra en el Registro de ejecución) y `admin_<Nombre>` para asignar el permiso de administrador. No están expuestas por la API.

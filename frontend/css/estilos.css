@@ -78,3 +78,54 @@ h2 { font-size: 1.25rem; margin-bottom: 8px; }
   text-align: center; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 10; }
 #aviso.visible { opacity: 1; }
 #aviso.error { background: #5b1b1b; } #aviso.ok { background: #14532d; }
+
+/* administración */
+.campo { width: 100%; min-height: 52px; margin: 6px 0 12px; padding: 10px 14px; border-radius: 12px;
+  border: 1px solid var(--borde); background: var(--tarjeta); color: var(--texto); font: inherit; }
+.lista { display: grid; gap: 10px; margin-bottom: 12px; }
+.fila-usuario { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 12px; }
+.insignias { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.insignia { font-size: .75rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--borde); }
+.insignia.azul { border-color: var(--azul); color: var(--azul); }
+.insignia.rojo { border-color: var(--rojo); color: var(--rojo); }
+.insignia.naranja { border-color: var(--naranja); color: var(--naranja); }
+.acciones { display: flex; gap: 8px; margin-top: 8px; }
+.acciones .btn { flex: 1; }
+.pin-grande { font-size: 2.6rem; font-weight: 800; letter-spacing: .25em; margin: 18px 0; color: var(--verde); }
+.registro { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; font-size: .85rem;
+  border-bottom: 1px solid var(--borde); }
+
+/* Fase 2: turnos, ventas y caja */
+.banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px;
+  border-radius: 12px; border: 1px solid var(--borde); background: var(--tarjeta); margin: 8px 0; }
+.banner.abierto { border-color: var(--verde); }
+.vacio { padding: 24px 8px; }
+.productos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.producto { background: var(--tarjeta); border: 2px solid var(--borde); border-radius: 16px; overflow: hidden; }
+.producto.con { border-color: var(--verde); }
+.tile { display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 84px; padding: 12px; text-align: left;
+  background: none; border: none; color: var(--texto); font: inherit; }
+.tile .nombre { font-weight: 700; }
+.tile:active { background: var(--borde); }
+.cantidad { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 8px; }
+.menos { width: 48px; height: 44px; border-radius: 12px; border: 1px solid var(--borde); background: var(--fondo);
+  color: var(--texto); font-size: 1.4rem; }
+.contador { font-size: 1.4rem; font-weight: 800; min-width: 40px; text-align: center; }
+.producto.con .contador { color: var(--verde); }
+.total-barra { display: flex; justify-content: space-between; align-items: center; font-size: 1.3rem; padding: 10px 4px; }
+.resumen-linea { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px; font-size: 1.1rem; }
+.linea { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px;
+  background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; }
+.linea.anulada { opacity: .5; text-decoration: line-through; }
+.derecha { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.bloque { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; padding: 8px 12px; margin: 8px 0; }
+.bloque h3 { margin: 4px 0; font-size: 1rem; }
+.renglon { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--borde); }
+.renglon:last-child { border-bottom: none; }
+.renglon.total { font-size: 1.2rem; color: var(--verde); }
+.renglon.ok strong { color: var(--verde); } .renglon.aviso strong { color: var(--naranja); } .renglon.mal strong { color: var(--rojo); }
+h3 { margin: 16px 0 8px; font-size: 1rem; }
+body[data-rol="cocina"] .productos { grid-template-columns: repeat(3, 1fr); }
+body[data-rol="cocina"] .tile { min-height: 96px; font-size: 1.15rem; }
+.producto { display: flex; flex-direction: column; }
+.producto .tile { flex: 1; }
