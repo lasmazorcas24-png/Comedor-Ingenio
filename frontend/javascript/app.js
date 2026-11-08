@@ -175,6 +175,7 @@
   }
 
   /* ---------- inicio por rol ---------- */
+  let modoRegistro = 'ventas';
   const MENUS = {
     socio:     { titulo: 'Socios',    tabs: [['🏠', 'Inicio', 'inicio'], ['🧾', 'Ventas', 'ventas'], ['💵', 'Caja', 'caja'], ['📊', 'Reportes', 'reportes'], ['⋯', 'Más', 'mas']] },
     encargada: { titulo: 'Encargada', tabs: [['🏠', 'Inicio', 'inicio'], ['✍️', 'Registrar', 'registrar'], ['💵', 'Caja', 'caja'], ['📦', 'Pedidos', 'pedidos'], ['⋯', 'Más', 'mas']] }
@@ -224,7 +225,7 @@
     const clave = menu.tabs[tabActiva][2];
     const paneles = {
       inicio: panelInicio, ventas: panelVentas, registrar: abrirRegistro, caja: panelCaja, mas: panelMas,
-      reportes: function () { marco(vacio('Los reportes llegan en la Fase 6.')); },
+      reportes: function () { panelProduccion(false); },
       pedidos: function () { marco(vacio('Los pedidos internos llegan en la Fase 4.')); }
     };
     (paneles[clave] || panelInicio)();
@@ -241,10 +242,12 @@
 
   async function panelInicio() {
     marco(cargando());
-    let est, res;
+    let est, res, prod = null;
     try {
-      const r = await Promise.all([Api.llamar('turnos.estado'), Api.llamar('resumen.inicio')]);
-      est = r[0]; res = r[1];
+      const llamadas = [Api.llamar('turnos.estado'), Api.llamar('resumen.inicio')];
+      if (tiene('produccion.ver')) llamadas.push(Api.llamar('produccion.resumen'));
+      const r = await Promise.all(llamadas);
+      est = r[0]; res = r[1]; prod = r[2] || null;
     } catch (e) { falloVista(e, panelInicio); return; }
     const colores = ['verde', 'azul', 'naranja', 'morado'];
     marco(h('div', {},
@@ -253,7 +256,8 @@
       h('div', { class: 'tarjetas' }, res.tarjetas.map(function (t, i) {
         const v = t.valor == null ? '—' : (t.formato === 'moneda' ? dinero(t.valor) : String(t.valor));
         return h('div', { class: 'tarjeta ' + colores[i % 4] }, h('span', { class: 'suave' }, t.titulo), h('strong', {}, v));
-      }))));
+      })),
+      prod && prod.turno ? bloqueProduccion(prod, true) : null));
   }
 
   function vistaAbrirTurno() {
@@ -317,11 +321,20 @@
     return h('div', {}, rejilla, h('div', { class: 'total-barra' }, h('span', {}, 'Total'), total), boton);
   }
 
+  function selectorModo() {
+    if (!tiene('produccion.ver')) return h('h2', {}, 'Registrar venta');
+    return h('div', { class: 'segmento' }, ['ventas', 'produccion'].map(function (m) {
+      return h('button', { class: 'seg' + (modoRegistro === m ? ' activa' : ''),
+        onclick: function () { modoRegistro = m; abrirRegistro(); } }, m === 'ventas' ? 'Ventas' : 'Producción');
+    }));
+  }
+
   async function abrirRegistro() {
+    if (modoRegistro === 'produccion' && tiene('produccion.ver')) { panelProduccion(true); return; }
     marco(cargando());
     let nodo;
     try { nodo = await nodoRegistroVentas(); } catch (e) { falloVista(e, abrirRegistro); return; }
-    marco(h('div', {}, h('h2', {}, 'Registrar venta'), nodo,
+    marco(h('div', {}, selectorModo(), nodo,
       tiene('ventas.ver') ? h('button', { class: 'btn texto', onclick: panelVentas }, 'Ver ventas del turno') : null));
   }
 
@@ -452,6 +465,131 @@
       h('button', { class: 'btn peligro', onclick: cerrarSesion }, 'Cerrar sesión')));
   }
 
+  /* --- producción (cocina, encargada y socios) --- */
+  const TIPOS = {
+    corte: { titulo: 'Registrar corte', corto: 'Corte', icono: '🍲', color: 'azul' },
+    uso:   { titulo: 'Registrar uso', corto: 'Uso', icono: '🥘', color: 'verde' },
+    merma: { titulo: 'Registrar merma', corto: 'Merma', icono: '🗑️', color: 'naranja' }
+  };
+  function kg(n) { return Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 2 }) + ' kg'; }
+  function conSigno(n) { return (n > 0 ? '+' : '') + kg(n); }
+
+  function pantalla(titulo, volver, nodo) {
+    if (usuario.rol === 'cocina') {
+      montar(h('div', { class: 'cocina' },
+        h('header', { class: 'barra' }, h('strong', {}, titulo),
+          h('button', { class: 'btn pequeno', onclick: volver }, 'Volver')), nodo));
+    } else {
+      marco(h('div', {}, h('h2', {}, titulo), nodo, h('button', { class: 'btn texto', onclick: volver }, 'Volver')));
+    }
+  }
+
+  function textoEstado(d) {
+    if (d.estado === 'ok') return '✅ Todo en orden (dentro del rango de ±' + kg(d.tolerancia) + ')';
+    if (d.estado === 'alerta') return '⚠️ Revisar: la diferencia pasa de ±' + kg(d.tolerancia);
+    return 'Aún no hay datos para comparar';
+  }
+
+  function bloqueProduccion(d, conTitulo) {
+    const clase = d.estado === 'ok' ? 'ok' : (d.estado === 'alerta' ? 'mal' : '');
+    const linea = function (e, v) { return h('div', { class: 'renglon' }, h('span', {}, e), h('strong', {}, kg(v))); };
+    return h('div', { class: 'bloque' },
+      conTitulo ? h('h3', {}, 'Producción del turno') : null,
+      linea('Corte (preparado)', d.corte), linea('Uso', d.uso),
+      d.ventasKg !== undefined ? linea('Ventas', d.ventasKg) : null,
+      d.diferencia !== undefined ? h('div', { class: 'renglon ' + clase }, h('span', {}, 'Diferencia (uso − ventas)'),
+        h('strong', {}, conSigno(d.diferencia))) : null,
+      linea('Merma', d.merma), linea('Sobrante', d.sobrante),
+      d.estado ? h('p', { class: 'suave' }, textoEstado(d)) : null);
+  }
+
+  async function flujoProduccion(tipo, volver) {
+    pantalla(TIPOS[tipo].titulo, volver, cargando());
+    let lista, est;
+    try {
+      const r = await Promise.all([Api.llamar('produccion.productos'), Api.llamar('turnos.estado')]);
+      lista = r[0]; est = r[1];
+    } catch (e) {
+      aviso(e.message, 'error');
+      if (e.codigo === 'sesion') { vistaLogin(); return; }
+      volver(); return;
+    }
+    if (!est.abierto) { pantalla(TIPOS[tipo].titulo, volver, vacio('No hay turno abierto. La encargada debe abrirlo.')); return; }
+    if (!lista.length) {
+      pantalla(TIPOS[tipo].titulo, volver, vacio('No hay platillos con peso por porción. Llena la columna porcion_kg en productos_menu.'));
+      return;
+    }
+    pantalla(TIPOS[tipo].titulo + ' · ¿cuál platillo?', volver, h('div', { class: 'productos' }, lista.map(function (p) {
+      return h('div', { class: 'producto' }, h('button', { class: 'tile', type: 'button',
+        onclick: function () { vistaKg(tipo, p, volver); } }, h('span', { class: 'nombre' }, p.nombre)));
+    })));
+  }
+
+  function vistaKg(tipo, p, volver) {
+    let valor = '';
+    const pantallaValor = h('div', { class: 'kg-valor' }, '0 kg');
+    const guardar = h('button', { class: 'btn primario', disabled: true, onclick: async function () {
+      guardar.disabled = true; guardar.textContent = 'Guardando…';
+      try {
+        const r = await Api.llamar('produccion.registrar', { tipo: tipo, producto_id: p.id, kg: Number(valor) });
+        aviso(TIPOS[tipo].corto + ' guardado: ' + kg(r.kg), 'ok');
+        volver();
+      } catch (e) {
+        aviso(e.message, 'error');
+        if (e.codigo === 'sesion') { vistaLogin(); return; }
+        guardar.textContent = 'Guardar'; guardar.disabled = false;
+      }
+    } }, 'Guardar');
+    function pintar() { pantallaValor.textContent = (valor || '0') + ' kg'; guardar.disabled = !(Number(valor) > 0); }
+    function tecla(t, f) { return h('button', { class: 'tecla', type: 'button', onclick: f }, t); }
+    const num = function (n) {
+      return tecla(String(n), function () {
+        const i = valor.indexOf('.');
+        if (valor.length >= 6 || (i !== -1 && valor.length - i > 2)) return;
+        valor = (valor === '0' ? '' : valor) + n; pintar();
+      });
+    };
+    const punto = tecla('.', function () { if (valor.indexOf('.') === -1) { valor = (valor || '0') + '.'; pintar(); } });
+    const borrar = tecla('⌫', function () { valor = valor.slice(0, -1); pintar(); });
+    pantalla(TIPOS[tipo].titulo + ' · ' + p.nombre, function () { flujoProduccion(tipo, volver); },
+      h('div', { class: 'kg' }, pantallaValor,
+        h('div', { class: 'teclado' }, num(7), num(8), num(9), num(4), num(5), num(6), num(1), num(2), num(3), punto, num(0), borrar),
+        guardar));
+  }
+
+  async function panelProduccion(conSelector) {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('produccion.resumen'); }
+    catch (e) { falloVista(e, function () { panelProduccion(conSelector); }); return; }
+    const volver = function () { panelProduccion(conSelector); };
+    const encabezado = conSelector ? selectorModo() : h('h2', {}, 'Producción del turno');
+    if (!d.turno) { marco(h('div', {}, encabezado, vacio('No hay turno abierto.'))); return; }
+    marco(h('div', {}, encabezado,
+      bloqueProduccion(d, false),
+      tiene('produccion.registrar') ? h('div', { class: 'acciones tres' }, ['corte', 'uso', 'merma'].map(function (t) {
+        return h('button', { class: 'btn', onclick: function () { flujoProduccion(t, volver); } }, TIPOS[t].icono + ' ' + TIPOS[t].corto);
+      })) : null,
+      d.platillos.length ? h('h3', {}, 'Por platillo') : null,
+      h('div', { class: 'lista' }, d.platillos.map(function (x) {
+        const dif = x.diferencia !== undefined ? ' · Vend. ' + kg(x.ventasKg) + ' · Dif. ' + conSigno(x.diferencia) : '';
+        return h('div', { class: 'linea' }, h('div', {}, h('strong', {}, x.producto),
+          h('div', { class: 'suave' }, 'Corte ' + kg(x.corte) + ' · Uso ' + kg(x.uso) + ' · Merma ' + kg(x.merma) + dif)));
+      })),
+      d.registros.length ? h('h3', {}, 'Registros') : null,
+      h('div', { class: 'lista' }, d.registros.map(function (r) {
+        return h('div', { class: 'linea' },
+          h('div', {}, h('strong', {}, TIPOS[r.tipo].corto + ' · ' + r.producto),
+            h('div', { class: 'suave' }, r.hora + ' · ' + r.usuario)),
+          h('div', { class: 'derecha' }, h('strong', {}, kg(r.kg)),
+            tiene('produccion.ajustar') ? h('button', { class: 'btn pequeno', onclick: async function () {
+              if (!confirm('¿Anular ' + TIPOS[r.tipo].corto.toLowerCase() + ' de ' + kg(r.kg) + '?')) return;
+              try { await Api.llamar('produccion.anular', { id: r.id }); aviso('Registro anulado', 'ok'); volver(); }
+              catch (e) { aviso(e.message, 'error'); }
+            } }, 'Anular') : null));
+      }))));
+  }
+
   /* --- cocina --- */
   async function vistaVentaCocina() {
     const cabecera = h('header', { class: 'barra' }, h('strong', {}, 'Registrar ventas'),
@@ -463,22 +601,44 @@
     montar(h('div', { class: 'cocina' }, cabecera, nodo));
   }
 
-  function vistaCocina() {
+  async function vistaCocina() {
+    const cabecera = h('header', { class: 'barra' },
+      h('strong', {}, 'Comedor Ingenio'),
+      h('span', { class: 'estado' }, '● En operación'),
+      h('button', { class: 'btn pequeno', onclick: cerrarSesion }, 'Salir'));
+    montar(h('div', { class: 'cocina' }, cabecera, cargando()));
+    let d = null;
+    try { d = await Api.llamar('produccion.resumen'); }
+    catch (e) {
+      if (e.codigo === 'sesion') { aviso(e.message, 'error'); vistaLogin(); return; }
+      aviso(e.message, 'error');
+    }
     const grande = function (txt, icono, color, accion) {
       return h('button', { class: 'grande ' + color, onclick: accion },
         h('span', { class: 'icono' }, icono), h('span', {}, txt));
     };
-    montar(h('div', { class: 'cocina' },
-      h('header', { class: 'barra' },
-        h('strong', {}, 'Comedor Ingenio'),
-        h('span', { class: 'estado' }, '● En operación'),
-        h('button', { class: 'btn pequeno', onclick: cerrarSesion }, 'Salir')),
+    const stat = function (t, v, color) {
+      return h('div', { class: 'stat ' + color }, h('span', { class: 'suave' }, t), h('strong', {}, kg(v)));
+    };
+    let resumen;
+    if (d && d.turno) {
+      resumen = h('div', {},
+        h('div', { class: 'stats' }, stat('Corte del día', d.corte, 'azul'), stat('Uso del día', d.uso, 'verde'),
+          d.ventasKg !== undefined ? stat('Ventas del día', d.ventasKg, 'morado') : stat('Merma', d.merma, 'naranja')),
+        d.diferencia !== undefined ? h('div', { class: 'dif ' + (d.estado === 'alerta' ? 'mal' : 'ok') },
+          h('span', {}, 'Diferencia'), h('strong', {}, conSigno(d.diferencia)),
+          h('span', {}, d.estado === 'alerta' ? '⚠️ Revisar' : (d.estado === 'ok' ? '✅ Todo en orden' : 'Sin datos'))) : null);
+    } else {
+      resumen = h('div', { class: 'dif' }, h('span', {}, d ? 'Turno cerrado. La encargada debe abrirlo para registrar.' : 'Sin conexión.'));
+    }
+    montar(h('div', { class: 'cocina' }, cabecera, resumen,
       h('div', { class: 'botonera' },
-        grande('Registrar corte', '🍲', 'azul', proximamente(3)),
-        grande('Registrar uso', '🥘', 'verde', proximamente(3)),
-        grande('Pedir insumos', '🛒', 'morado', proximamente(4)),
-        grande('Registrar ventas', '🧾', 'naranja', vistaVentaCocina)),
-      h('footer', { class: 'pie' }, 'Pendientes: 0 · Hola, ' + usuario.nombre)));
+        grande('Registrar corte', '🍲', 'azul', function () { flujoProduccion('corte', vistaCocina); }),
+        grande('Registrar uso', '🥘', 'verde', function () { flujoProduccion('uso', vistaCocina); }),
+        grande('Registrar merma', '🗑️', 'naranja', function () { flujoProduccion('merma', vistaCocina); }),
+        grande('Registrar ventas', '🧾', 'morado', vistaVentaCocina)),
+      h('footer', { class: 'pie' }, 'Hola, ' + usuario.nombre + ' · ',
+        h('button', { class: 'btn texto en-linea', onclick: proximamente(4) }, 'Pedir insumos'))));
   }
 
   /* ---------- administración (solo socios con permiso de administrador) ---------- */

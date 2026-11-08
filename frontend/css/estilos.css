@@ -129,3 +129,31 @@ body[data-rol="cocina"] .productos { grid-template-columns: repeat(3, 1fr); }
 body[data-rol="cocina"] .tile { min-height: 96px; font-size: 1.15rem; }
 .producto { display: flex; flex-direction: column; }
 .producto .tile { flex: 1; }
+
+/* Fase 3: producción y cocina */
+.segmento { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; padding: 4px;
+  background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; }
+.seg { min-height: 44px; border: none; border-radius: 10px; background: none; color: var(--suave); font: inherit; font-weight: 600; }
+.seg.activa { background: var(--borde); color: var(--texto); }
+.acciones.tres { display: grid; grid-template-columns: repeat(3, 1fr); }
+.kg { max-width: 360px; margin: 0 auto; }
+.kg-valor { text-align: center; font-size: 2.4rem; font-weight: 800; padding: 8px 0 12px; color: var(--verde); }
+.kg .teclado { max-width: 360px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.stat { background: var(--tarjeta); border: 1px solid var(--borde); border-top: 4px solid var(--azul); border-radius: 14px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.stat strong { font-size: 1.7rem; }
+.stat.verde { border-top-color: var(--verde); } .stat.morado { border-top-color: var(--morado); }
+.stat.naranja { border-top-color: var(--naranja); }
+.dif { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; margin-bottom: 8px;
+  background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px; }
+.dif strong { font-size: 1.8rem; }
+.dif.ok { border-color: var(--verde); } .dif.mal { border-color: var(--rojo); }
+.dif.ok strong { color: var(--verde); } .dif.mal strong { color: var(--rojo); }
+body[data-rol="cocina"] .cocina .botonera { flex: none; grid-template-columns: repeat(4, 1fr); }
+body[data-rol="cocina"] .cocina .grande { min-height: 104px; font-size: 1.05rem; padding: 6px; text-align: center; }
+body[data-rol="cocina"] .cocina .grande .icono { font-size: 1.8rem; }
+body[data-rol="cocina"] .kg { max-width: 420px; }
+body[data-rol="cocina"] .kg .tecla { min-height: 52px; }
+body[data-rol="cocina"] .kg-valor { font-size: 2rem; padding: 2px 0 6px; }
+.btn.en-linea { display: inline-block; width: auto; min-height: 36px; margin: 0; padding: 4px 8px; }
