@@ -1,3 +1,4 @@
+
 name: Descomprimir zip inicial
 on:
   workflow_dispatch:
@@ -8,17 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Descomprimir y organizar
+      - name: Descomprimir el zip mas reciente
         run: |
-          ZIP="$(ls Comedor-Ingenio*.zip | sort -V | tail -n1)"
+          ZIP=$(for f in Comedor-Ingenio*.zip; do n=$(echo "$f" | grep -o '([0-9]*)' | tr -d '()'); echo "${n:-0}|$f"; done | sort -t'|' -k1,1n | tail -n 1 | cut -d'|' -f2)
+          echo "Usando: $ZIP"
           unzip -q "$ZIP" -d /tmp/ci
-          rm -rf /tmp/ci/Comedor-Ingenio/.git
           cp -a /tmp/ci/Comedor-Ingenio/. .
+          rm -f Comedor-Ingenio*.zip
       - name: Commit y push
         run: |
           git config user.name "Comedor Ingenio"
           git config user.email "dev@comedoringenio.local"
           git add -A
-          git commit -m "feat(fase1): pantalla de acceso, backend y documentacion"
+          git commit -m "feat: actualizacion desde zip" || echo "Sin cambios"
           git push origin HEAD:main
-          git push origin HEAD:refs/heads/dev
