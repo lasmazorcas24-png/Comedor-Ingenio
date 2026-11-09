@@ -157,3 +157,15 @@ body[data-rol="cocina"] .kg { max-width: 420px; }
 body[data-rol="cocina"] .kg .tecla { min-height: 52px; }
 body[data-rol="cocina"] .kg-valor { font-size: 2rem; padding: 2px 0 6px; }
 .btn.en-linea { display: inline-block; width: auto; min-height: 36px; margin: 0; padding: 4px 8px; }
+
+/* Fase 4: inventario y pedidos */
+.nav .tab { font-size: .66rem; padding: 0; }
+.nav .tab span:last-child { white-space: nowrap; }
+.banner.alerta { border-color: var(--naranja); color: var(--naranja); cursor: pointer; }
+.fila-dos { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.fila-usuario.bajo { border-color: var(--rojo); }
+.rojo { color: var(--rojo); }
+.insignia.verde { border-color: var(--verde); color: var(--verde); }
+.campo.corto { width: 96px; min-height: 44px; margin: 0; text-align: right; }
+.segmento.tres { grid-template-columns: repeat(3, 1fr); }
+.fila-usuario .btn.pequeno { margin-top: 6px; }

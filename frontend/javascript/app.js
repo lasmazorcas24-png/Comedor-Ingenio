@@ -177,9 +177,10 @@
   /* ---------- inicio por rol ---------- */
   let modoRegistro = 'ventas';
   const MENUS = {
-    socio:     { titulo: 'Socios',    tabs: [['🏠', 'Inicio', 'inicio'], ['🧾', 'Ventas', 'ventas'], ['💵', 'Caja', 'caja'], ['📊', 'Reportes', 'reportes'], ['⋯', 'Más', 'mas']] },
-    encargada: { titulo: 'Encargada', tabs: [['🏠', 'Inicio', 'inicio'], ['✍️', 'Registrar', 'registrar'], ['💵', 'Caja', 'caja'], ['📦', 'Pedidos', 'pedidos'], ['⋯', 'Más', 'mas']] }
+    socio:     { titulo: 'Socios',    tabs: [['🏠', 'Inicio', 'inicio'], ['🧾', 'Ventas', 'ventas'], ['💵', 'Caja', 'caja'], ['📦', 'Inventario', 'inventario'], ['📊', 'Reportes', 'reportes'], ['⋯', 'Más', 'mas']] },
+    encargada: { titulo: 'Encargada', tabs: [['🏠', 'Inicio', 'inicio'], ['✍️', 'Registrar', 'registrar'], ['💵', 'Caja', 'caja'], ['📦', 'Inventario', 'inventario'], ['🛒', 'Pedidos', 'pedidos'], ['⋯', 'Más', 'mas']] }
   };
+  let modoReporte = 'produccion';
 
   function tiene(p) { return usuario.permisos.indexOf('*') !== -1 || usuario.permisos.indexOf(p) !== -1; }
   function dinero(n) { return Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }); }
@@ -205,7 +206,7 @@
         h('div', {}, h('strong', {}, 'Comedor Ingenio'), h('span', { class: 'suave' }, ' · ' + menu.titulo)),
         h('span', { class: 'estado' }, '● En línea')),
       h('div', { class: 'contenido' }, contenido),
-      h('nav', { class: 'nav' }, menu.tabs.map(function (t, i) {
+      h('nav', { class: 'nav', style: 'grid-template-columns:repeat(' + menu.tabs.length + ',1fr)' }, menu.tabs.map(function (t, i) {
         return h('button', {
           class: 'tab' + (i === tabActiva ? ' activa' : ''),
           onclick: function () { tabActiva = i; vistaInicio(); }
@@ -225,8 +226,7 @@
     const clave = menu.tabs[tabActiva][2];
     const paneles = {
       inicio: panelInicio, ventas: panelVentas, registrar: abrirRegistro, caja: panelCaja, mas: panelMas,
-      reportes: function () { panelProduccion(false); },
-      pedidos: function () { marco(vacio('Los pedidos internos llegan en la Fase 4.')); }
+      inventario: panelInventario, reportes: panelReportes, pedidos: function () { panelPedidos(); }
     };
     (paneles[clave] || panelInicio)();
   }
@@ -240,19 +240,31 @@
       tiene('turnos.operar') ? h('button', { class: 'btn pequeno', onclick: vistaAbrirTurno }, 'Abrir turno') : null);
   }
 
+  function irAPestana(clave) {
+    const menu = MENUS[usuario.rol] || MENUS.encargada;
+    for (let k = 0; k < menu.tabs.length; k++) if (menu.tabs[k][2] === clave) tabActiva = k;
+    vistaInicio();
+  }
+
+  function avisoBajos(n) {
+    return h('div', { class: 'banner alerta', onclick: function () { irAPestana('inventario'); } },
+      '⚠️ ' + n + (n === 1 ? ' insumo bajo el mínimo' : ' insumos bajo el mínimo'));
+  }
+
   async function panelInicio() {
     marco(cargando());
-    let est, res, prod = null;
+    let est, res, prod, inv;
     try {
-      const llamadas = [Api.llamar('turnos.estado'), Api.llamar('resumen.inicio')];
-      if (tiene('produccion.ver')) llamadas.push(Api.llamar('produccion.resumen'));
-      const r = await Promise.all(llamadas);
-      est = r[0]; res = r[1]; prod = r[2] || null;
+      const r = await Promise.all([Api.llamar('turnos.estado'), Api.llamar('resumen.inicio'),
+        tiene('produccion.ver') ? Api.llamar('produccion.resumen') : null,
+        tiene('inventario.ver') ? Api.llamar('inventario.lista') : null]);
+      est = r[0]; res = r[1]; prod = r[2]; inv = r[3];
     } catch (e) { falloVista(e, panelInicio); return; }
     const colores = ['verde', 'azul', 'naranja', 'morado'];
     marco(h('div', {},
       h('h2', {}, 'Hola, ' + usuario.nombre),
       bannerTurno(est),
+      inv && inv.bajos > 0 ? avisoBajos(inv.bajos) : null,
       h('div', { class: 'tarjetas' }, res.tarjetas.map(function (t, i) {
         const v = t.valor == null ? '—' : (t.formato === 'moneda' ? dinero(t.valor) : String(t.valor));
         return h('div', { class: 'tarjeta ' + colores[i % 4] }, h('span', { class: 'suave' }, t.titulo), h('strong', {}, v));
@@ -330,7 +342,7 @@
   }
 
   async function abrirRegistro() {
-    if (modoRegistro === 'produccion' && tiene('produccion.ver')) { panelProduccion(true); return; }
+    if (modoRegistro === 'produccion' && tiene('produccion.ver')) { panelProduccion('registro'); return; }
     marco(cargando());
     let nodo;
     try { nodo = await nodoRegistroVentas(); } catch (e) { falloVista(e, abrirRegistro); return; }
@@ -532,7 +544,7 @@
       guardar.disabled = true; guardar.textContent = 'Guardando…';
       try {
         const r = await Api.llamar('produccion.registrar', { tipo: tipo, producto_id: p.id, kg: Number(valor) });
-        aviso(TIPOS[tipo].corto + ' guardado: ' + kg(r.kg), 'ok');
+        aviso(TIPOS[tipo].corto + ' guardado: ' + kg(r.kg) + (r.inventario === 'sin_receta' ? ' · sin receta, no descontó inventario' : ''), 'ok');
         volver();
       } catch (e) {
         aviso(e.message, 'error');
@@ -563,7 +575,7 @@
     try { d = await Api.llamar('produccion.resumen'); }
     catch (e) { falloVista(e, function () { panelProduccion(conSelector); }); return; }
     const volver = function () { panelProduccion(conSelector); };
-    const encabezado = conSelector ? selectorModo() : h('h2', {}, 'Producción del turno');
+    const encabezado = conSelector === 'registro' ? selectorModo() : (conSelector === 'reporte' ? selectorReporte() : h('h2', {}, 'Producción del turno'));
     if (!d.turno) { marco(h('div', {}, encabezado, vacio('No hay turno abierto.'))); return; }
     marco(h('div', {}, encabezado,
       bloqueProduccion(d, false),
@@ -590,6 +602,148 @@
       }))));
   }
 
+  /* --- inventario --- */
+  function cant(n, u) { return Number(n || 0).toLocaleString('es-MX', { maximumFractionDigits: 3 }) + ' ' + u; }
+
+  async function panelInventario() {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('inventario.lista'); } catch (e) { falloVista(e, panelInventario); return; }
+    marco(h('div', {},
+      h('h2', {}, 'Inventario'),
+      d.valorTotal !== undefined ? h('div', { class: 'resumen-linea' }, h('span', {}, 'Valor del inventario'), h('strong', {}, dinero(d.valorTotal))) : null,
+      d.bajos ? avisoBajos(d.bajos) : null,
+      h('div', { class: 'lista' }, d.insumos.map(function (i) {
+        return h('div', { class: 'fila-usuario' + (i.bajo ? ' bajo' : '') },
+          h('div', { class: 'fila-dos' }, h('strong', {}, i.nombre), h('strong', { class: i.bajo ? 'rojo' : '' }, cant(i.existencia, i.unidad))),
+          h('div', { class: 'suave' }, 'Mínimo ' + cant(i.minimo, i.unidad) +
+            (i.costo !== undefined ? ' · ' + dinero(i.costo) + '/' + i.unidad + ' · valor ' + dinero(i.valor) : '')),
+          tiene('inventario.ajustar') ? h('div', { class: 'acciones' },
+            h('button', { class: 'btn pequeno', onclick: function () { vistaInvMov(i, 'entrada'); } }, '+ Entrada'),
+            h('button', { class: 'btn pequeno', onclick: function () { vistaInvMov(i, 'salida'); } }, '− Salida'),
+            h('button', { class: 'btn pequeno', onclick: function () { vistaInvMov(i, 'ajuste'); } }, 'Contar')) : null);
+      }))));
+  }
+
+  function vistaInvMov(i, tipo) {
+    const titulos = { entrada: 'Entrada de ', salida: 'Salida de ', ajuste: 'Contar ' };
+    const cantidad = h('input', { class: 'campo', type: 'text', inputmode: 'decimal',
+      placeholder: tipo === 'ajuste' ? 'Existencia contada (' + i.unidad + ')' : 'Cantidad (' + i.unidad + ')' });
+    const nota = h('input', { class: 'campo', type: 'text', maxlength: '120',
+      placeholder: tipo === 'entrada' ? 'Nota (opcional)' : 'Motivo (obligatorio)' });
+    marco(h('div', {},
+      h('h2', {}, titulos[tipo] + i.nombre),
+      h('p', { class: 'suave' }, 'Ahora hay ' + cant(i.existencia, i.unidad)),
+      h('label', { class: 'suave' }, tipo === 'ajuste' ? 'Existencia contada' : 'Cantidad'), cantidad,
+      h('label', { class: 'suave' }, 'Nota'), nota,
+      h('button', { class: 'btn primario', onclick: async function (ev) {
+        const b = ev.currentTarget;
+        if (cantidad.value.trim() === '') { aviso('Escribe la cantidad', 'error'); return; }
+        b.disabled = true;
+        const datos = { insumo_id: i.id, tipo: tipo, nota: nota.value };
+        if (tipo === 'ajuste') datos.existencia_real = numero(cantidad.value); else datos.cantidad = numero(cantidad.value);
+        try {
+          const r = await Api.llamar('inventario.movimiento', datos);
+          aviso('Listo · ahora hay ' + cant(r.existencia, r.unidad), 'ok'); panelInventario();
+        } catch (e) { aviso(e.message, 'error'); b.disabled = false; if (e.codigo === 'sesion') vistaLogin(); }
+      } }, 'Guardar'),
+      h('button', { class: 'btn texto', onclick: panelInventario }, 'Cancelar')));
+  }
+
+  /* --- reportes de socios: producción, recetas, pedidos --- */
+  function selectorReporte() {
+    return h('div', { class: 'segmento tres' }, [['produccion', 'Producción'], ['recetas', 'Recetas'], ['pedidos', 'Pedidos']].map(function (m) {
+      return h('button', { class: 'seg' + (modoReporte === m[0] ? ' activa' : ''),
+        onclick: function () { modoReporte = m[0]; panelReportes(); } }, m[1]);
+    }));
+  }
+
+  function panelReportes() {
+    if (modoReporte === 'recetas') panelRecetas();
+    else if (modoReporte === 'pedidos') panelPedidos('reporte');
+    else panelProduccion('reporte');
+  }
+
+  async function panelRecetas() {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('recetas.lista'); } catch (e) { falloVista(e, panelRecetas); return; }
+    marco(h('div', {}, selectorReporte(),
+      h('div', { class: 'lista' }, d.length ? d.map(function (r) {
+        return h('div', { class: 'bloque' },
+          h('strong', {}, r.producto),
+          h('div', { class: 'renglon' }, h('span', {}, 'Costo por porción'), h('strong', {}, dinero(r.costoPorcion))),
+          h('div', { class: 'renglon' }, h('span', {}, 'Precio de venta'), h('strong', {}, dinero(r.precio))),
+          h('div', { class: 'renglon ' + (r.margen >= 0 ? 'ok' : 'mal') }, h('span', {}, 'Margen'),
+            h('strong', {}, dinero(r.margen) + ' (' + r.margenPct + '%)')),
+          h('p', { class: 'suave' }, 'Rinde ' + r.rendimiento + ' porciones · ' +
+            r.ingredientes.map(function (x) { return cant(x.cantidad, x.unidad) + ' ' + x.insumo; }).join(', ')));
+      }) : vacio('No hay recetas. Se capturan en las hojas recetas y receta_ingredientes.'))));
+  }
+
+  /* --- pedidos internos --- */
+  const ESTADOS = { pendiente: ['Pendiente', 'naranja'], aprobado: ['Aprobado', 'azul'], recibido: ['Recibido', 'verde'], rechazado: ['Rechazado', 'rojo'] };
+
+  function tarjetaPedido(p, recargar, soloVer) {
+    const e = ESTADOS[p.estado] || [p.estado, ''];
+    const puede = !soloVer && tiene('pedidos.aprobar');
+    return h('div', { class: 'fila-usuario' },
+      h('div', { class: 'fila-dos' }, h('strong', {}, p.solicitante + ' · ' + p.hora), h('span', { class: 'insignia ' + e[1] }, e[0])),
+      h('div', { class: 'suave' }, p.lineas.map(function (l) {
+        const a = l.aprobada !== null && l.aprobada !== l.solicitada ? ' (aprobado ' + cant(l.aprobada, l.unidad) + ')' : '';
+        return cant(l.solicitada, l.unidad) + ' ' + l.insumo + a;
+      }).join(' · ')),
+      p.nota ? h('div', { class: 'suave' }, 'Nota: ' + p.nota) : null,
+      p.estado === 'rechazado' && p.motivo ? h('div', { class: 'error' }, 'Motivo: ' + p.motivo) : null,
+      puede && p.estado === 'pendiente' ? h('button', { class: 'btn pequeno', onclick: function () { vistaPedido(p, recargar); } }, 'Revisar') : null,
+      puede && p.estado === 'aprobado' ? h('button', { class: 'btn pequeno', onclick: async function () {
+        if (!confirm('¿Marcar como recibido? Se sumará al inventario.')) return;
+        try { await Api.llamar('pedidos.recibir', { id: p.id }); aviso('Entradas registradas en el inventario', 'ok'); recargar(); }
+        catch (er) { aviso(er.message, 'error'); }
+      } }, 'Marcar recibido') : null);
+  }
+
+  async function panelPedidos(modo) {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('pedidos.lista'); } catch (e) { falloVista(e, function () { panelPedidos(modo); }); return; }
+    const recargar = function () { panelPedidos(modo); };
+    marco(h('div', {},
+      modo === 'reporte' ? selectorReporte() : h('h2', {}, 'Pedidos internos'),
+      h('div', { class: 'resumen-linea' }, h('span', {}, d.pendientes + ' por resolver · ' + d.porRecibir + ' por recibir')),
+      h('div', { class: 'lista' }, d.pedidos.length ? d.pedidos.map(function (p) { return tarjetaPedido(p, recargar); }) : vacio('No hay pedidos.'))));
+  }
+
+  function vistaPedido(p, recargar) {
+    const campos = p.lineas.map(function (l) {
+      return h('input', { class: 'campo corto', type: 'text', inputmode: 'decimal', value: String(l.solicitada) });
+    });
+    marco(h('div', {},
+      h('h2', {}, 'Pedido de ' + p.solicitante),
+      p.nota ? h('p', { class: 'suave' }, 'Nota: ' + p.nota) : null,
+      h('p', { class: 'suave' }, 'Puedes cambiar las cantidades antes de aprobar.'),
+      h('div', { class: 'lista' }, p.lineas.map(function (l, k) {
+        return h('div', { class: 'linea' },
+          h('div', {}, h('strong', {}, l.insumo), h('div', { class: 'suave' }, 'Pidió ' + cant(l.solicitada, l.unidad))),
+          h('div', { class: 'derecha' }, campos[k], h('span', { class: 'suave' }, l.unidad)));
+      })),
+      h('button', { class: 'btn primario', onclick: async function (ev) {
+        const b = ev.currentTarget; b.disabled = true;
+        try {
+          await Api.llamar('pedidos.resolver', { id: p.id, decision: 'aprobar',
+            lineas: p.lineas.map(function (l, k) { return { detalle_id: l.id, cantidad: numero(campos[k].value) }; }) });
+          aviso('Pedido aprobado', 'ok'); recargar();
+        } catch (e) { aviso(e.message, 'error'); b.disabled = false; }
+      } }, 'Aprobar'),
+      h('button', { class: 'btn peligro', onclick: async function () {
+        const m = prompt('Motivo del rechazo:');
+        if (!m) return;
+        try { await Api.llamar('pedidos.resolver', { id: p.id, decision: 'rechazar', motivo: m }); aviso('Pedido rechazado', 'ok'); recargar(); }
+        catch (e) { aviso(e.message, 'error'); }
+      } }, 'Rechazar'),
+      h('button', { class: 'btn texto', onclick: recargar }, 'Volver')));
+  }
+
   /* --- cocina --- */
   async function vistaVentaCocina() {
     const cabecera = h('header', { class: 'barra' }, h('strong', {}, 'Registrar ventas'),
@@ -601,15 +755,71 @@
     montar(h('div', { class: 'cocina' }, cabecera, nodo));
   }
 
+  async function vistaPedirInsumos() {
+    const cabecera = h('header', { class: 'barra' }, h('strong', {}, 'Pedir insumos'),
+      h('button', { class: 'btn pequeno', onclick: vistaCocina }, 'Volver'));
+    montar(h('div', { class: 'cocina' }, cabecera, cargando()));
+    let cat;
+    try { cat = await Api.llamar('pedidos.catalogo'); }
+    catch (e) { aviso(e.message, 'error'); if (e.codigo === 'sesion') { vistaLogin(); return; } vistaCocina(); return; }
+    const cantidades = {}, contadores = {};
+    const boton = h('button', { class: 'btn primario', disabled: true, onclick: enviar }, 'Enviar pedido');
+    function pintar() {
+      let n = 0;
+      cat.forEach(function (i) {
+        const c = cantidades[i.id] || 0;
+        if (c > 0) n++;
+        contadores[i.id].textContent = c + ' ' + i.unidad;
+        contadores[i.id].closest('.producto').classList.toggle('con', c > 0);
+      });
+      boton.disabled = n === 0;
+      boton.textContent = n ? 'Enviar pedido (' + n + ')' : 'Enviar pedido';
+    }
+    async function enviar() {
+      const lineas = cat.filter(function (i) { return cantidades[i.id] > 0; })
+        .map(function (i) { return { insumo_id: i.id, cantidad: cantidades[i.id] }; });
+      boton.disabled = true; boton.textContent = 'Enviando…';
+      try { await Api.llamar('pedidos.crear', { lineas: lineas }); aviso('Pedido enviado a la encargada', 'ok'); vistaCocina(); }
+      catch (e) { aviso(e.message, 'error'); if (e.codigo === 'sesion') { vistaLogin(); return; } pintar(); }
+    }
+    const rejilla = h('div', { class: 'productos' }, cat.map(function (i) {
+      const c = h('span', { class: 'contador' }, '0 ' + i.unidad);
+      contadores[i.id] = c;
+      return h('div', { class: 'producto' },
+        h('button', { class: 'tile', type: 'button', onclick: function () {
+          if ((cantidades[i.id] || 0) < 999) { cantidades[i.id] = (cantidades[i.id] || 0) + 1; pintar(); }
+        } }, h('span', { class: 'nombre' }, i.nombre), h('span', { class: 'suave' }, 'Toca para sumar 1 ' + i.unidad)),
+        h('div', { class: 'cantidad' },
+          h('button', { class: 'menos', type: 'button', 'aria-label': 'Quitar uno', onclick: function () {
+            if (cantidades[i.id] > 0) { cantidades[i.id]--; pintar(); }
+          } }, '−'), c));
+    }));
+    montar(h('div', { class: 'cocina' }, cabecera, h('div', {}, rejilla, boton)));
+  }
+
+  async function vistaPedidosCocina() {
+    const cabecera = h('header', { class: 'barra' }, h('strong', {}, 'Mis pedidos'),
+      h('button', { class: 'btn pequeno', onclick: vistaCocina }, 'Volver'));
+    montar(h('div', { class: 'cocina' }, cabecera, cargando()));
+    let d;
+    try { d = await Api.llamar('pedidos.lista'); }
+    catch (e) { aviso(e.message, 'error'); if (e.codigo === 'sesion') { vistaLogin(); return; } vistaCocina(); return; }
+    montar(h('div', { class: 'cocina' }, cabecera,
+      h('div', { class: 'lista' }, d.pedidos.length ? d.pedidos.map(function (p) { return tarjetaPedido(p, vistaPedidosCocina, true); }) : vacio('No hay pedidos.'))));
+  }
+
   async function vistaCocina() {
     const cabecera = h('header', { class: 'barra' },
       h('strong', {}, 'Comedor Ingenio'),
       h('span', { class: 'estado' }, '● En operación'),
       h('button', { class: 'btn pequeno', onclick: cerrarSesion }, 'Salir'));
     montar(h('div', { class: 'cocina' }, cabecera, cargando()));
-    let d = null;
-    try { d = await Api.llamar('produccion.resumen'); }
-    catch (e) {
+    let d = null, ped = null;
+    try {
+      const r = await Promise.all([Api.llamar('produccion.resumen'),
+        Api.llamar('pedidos.lista').catch(function () { return null; })]);
+      d = r[0]; ped = r[1];
+    } catch (e) {
       if (e.codigo === 'sesion') { aviso(e.message, 'error'); vistaLogin(); return; }
       aviso(e.message, 'error');
     }
@@ -638,7 +848,9 @@
         grande('Registrar merma', '🗑️', 'naranja', function () { flujoProduccion('merma', vistaCocina); }),
         grande('Registrar ventas', '🧾', 'morado', vistaVentaCocina)),
       h('footer', { class: 'pie' }, 'Hola, ' + usuario.nombre + ' · ',
-        h('button', { class: 'btn texto en-linea', onclick: proximamente(4) }, 'Pedir insumos'))));
+        h('button', { class: 'btn texto en-linea', onclick: vistaPedirInsumos }, 'Pedir insumos'), ' · ',
+        h('button', { class: 'btn texto en-linea', onclick: vistaPedidosCocina },
+          'Pendientes: ' + (ped ? ped.pendientes + ped.porRecibir : 0)))));
   }
 
   /* ---------- administración (solo socios con permiso de administrador) ---------- */

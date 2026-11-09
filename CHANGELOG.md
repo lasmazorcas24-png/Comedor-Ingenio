@@ -2,6 +2,7 @@
 
 ## [Sin publicar]
 ### Agregado
+- Fase 4: inventario con existencias calculadas y alertas de mínimo, recetas con costo por porción y margen (solo socios), descuento automático de insumos por corte y por venta, y pedidos internos (cocina pide, encargada aprueba, rechaza o modifica y registra la recepción). Backend 0.5.0 en `Fase4.gs`.
 - Fase 3: producción en kilos (corte, uso, merma), diferencia uso − ventas con tolerancia configurable, pantalla de cocina rediseñada y vista de producción para encargada y socios (backend 0.4.0 en `Fase3.gs`).
 - Fase 2: turnos, ventas y caja (backend 0.3.0 en `Fase2.gs`; pantallas de registro de ventas, caja, gastos y cierre con conteo ciego). Menú de ejemplo.
 - v0.2.0: panel de administración (crear usuarios, restablecer PIN, activar/desactivar, actividad reciente) para socios con `es_admin`, y funciones de recuperación de acceso desde el editor.
