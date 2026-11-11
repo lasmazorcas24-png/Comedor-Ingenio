@@ -181,6 +181,7 @@
     encargada: { titulo: 'Encargada', tabs: [['🏠', 'Inicio', 'inicio'], ['✍️', 'Registrar', 'registrar'], ['💵', 'Caja', 'caja'], ['📦', 'Inventario', 'inventario'], ['🛒', 'Pedidos', 'pedidos'], ['⋯', 'Más', 'mas']] }
   };
   let modoReporte = 'produccion';
+  let alertasNuevas = 0;
 
   function tiene(p) { return usuario.permisos.indexOf('*') !== -1 || usuario.permisos.indexOf(p) !== -1; }
   function dinero(n) { return Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' }); }
@@ -204,7 +205,10 @@
     montar(h('div', { class: 'inicio' },
       h('header', { class: 'barra' },
         h('div', {}, h('strong', {}, 'Comedor Ingenio'), h('span', { class: 'suave' }, ' · ' + menu.titulo)),
-        h('span', { class: 'estado' }, '● En línea')),
+        h('div', { class: 'barra-der' },
+          tiene('alertas.ver') ? h('button', { class: 'campana' + (alertasNuevas ? ' con' : ''), 'aria-label': 'Alertas', onclick: panelAlertas },
+            '🔔' + (alertasNuevas ? ' ' + alertasNuevas : '')) : null,
+          h('span', { class: 'estado' }, '● En línea'))),
       h('div', { class: 'contenido' }, contenido),
       h('nav', { class: 'nav', style: 'grid-template-columns:repeat(' + menu.tabs.length + ',1fr)' }, menu.tabs.map(function (t, i) {
         return h('button', {
@@ -257,8 +261,10 @@
     try {
       const r = await Promise.all([Api.llamar('turnos.estado'), Api.llamar('resumen.inicio'),
         tiene('produccion.ver') ? Api.llamar('produccion.resumen') : null,
-        tiene('inventario.ver') ? Api.llamar('inventario.lista') : null]);
+        tiene('inventario.ver') ? Api.llamar('inventario.lista') : null,
+        tiene('alertas.ver') ? Api.llamar('alertas.lista') : null]);
       est = r[0]; res = r[1]; prod = r[2]; inv = r[3];
+      if (r[4]) alertasNuevas = r[4].nuevas;
     } catch (e) { falloVista(e, panelInicio); return; }
     const colores = ['verde', 'azul', 'naranja', 'morado'];
     marco(h('div', {},
@@ -334,15 +340,19 @@
   }
 
   function selectorModo() {
-    if (!tiene('produccion.ver')) return h('h2', {}, 'Registrar venta');
-    return h('div', { class: 'segmento' }, ['ventas', 'produccion'].map(function (m) {
-      return h('button', { class: 'seg' + (modoRegistro === m ? ' activa' : ''),
-        onclick: function () { modoRegistro = m; abrirRegistro(); } }, m === 'ventas' ? 'Ventas' : 'Producción');
+    const modos = [['ventas', 'Ventas']];
+    if (tiene('produccion.ver')) modos.push(['produccion', 'Producción']);
+    if (tiene('checklists.ejecutar')) modos.push(['checklists', 'Checklists']);
+    if (modos.length === 1) return h('h2', {}, 'Registrar venta');
+    return h('div', { class: 'segmento' + (modos.length === 3 ? ' tres' : '') }, modos.map(function (m) {
+      return h('button', { class: 'seg' + (modoRegistro === m[0] ? ' activa' : ''),
+        onclick: function () { modoRegistro = m[0]; abrirRegistro(); } }, m[1]);
     }));
   }
 
   async function abrirRegistro() {
     if (modoRegistro === 'produccion' && tiene('produccion.ver')) { panelProduccion('registro'); return; }
+    if (modoRegistro === 'checklists' && tiene('checklists.ejecutar')) { panelChecklists(); return; }
     marco(cargando());
     let nodo;
     try { nodo = await nodoRegistroVentas(); } catch (e) { falloVista(e, abrirRegistro); return; }
@@ -613,6 +623,7 @@
       h('h2', {}, 'Inventario'),
       d.valorTotal !== undefined ? h('div', { class: 'resumen-linea' }, h('span', {}, 'Valor del inventario'), h('strong', {}, dinero(d.valorTotal))) : null,
       d.bajos ? avisoBajos(d.bajos) : null,
+      usuario.es_admin ? h('button', { class: 'btn', onclick: vistaNuevoInsumo }, '+ Agregar insumo nuevo') : null,
       h('div', { class: 'lista' }, d.insumos.map(function (i) {
         return h('div', { class: 'fila-usuario' + (i.bajo ? ' bajo' : '') },
           h('div', { class: 'fila-dos' }, h('strong', {}, i.nombre), h('strong', { class: i.bajo ? 'rojo' : '' }, cant(i.existencia, i.unidad))),
@@ -621,7 +632,8 @@
           tiene('inventario.ajustar') ? h('div', { class: 'acciones' },
             h('button', { class: 'btn pequeno', onclick: function () { vistaInvMov(i, 'entrada'); } }, '+ Entrada'),
             h('button', { class: 'btn pequeno', onclick: function () { vistaInvMov(i, 'salida'); } }, '− Salida'),
-            h('button', { class: 'btn pequeno', onclick: function () { vistaInvMov(i, 'ajuste'); } }, 'Contar')) : null);
+            h('button', { class: 'btn pequeno', onclick: function () { vistaInvMov(i, 'ajuste'); } }, 'Contar'),
+            usuario.es_admin ? h('button', { class: 'btn pequeno', onclick: function () { vistaMinimo(i); } }, 'Mínimo') : null) : null);
       }))));
   }
 
@@ -652,7 +664,8 @@
 
   /* --- reportes de socios: producción, recetas, pedidos --- */
   function selectorReporte() {
-    return h('div', { class: 'segmento tres' }, [['produccion', 'Producción'], ['recetas', 'Recetas'], ['pedidos', 'Pedidos']].map(function (m) {
+    const modos = [['produccion', 'Producción'], ['recetas', 'Recetas'], ['pedidos', 'Pedidos'], ['checklists', 'Checklists']];
+    return h('div', { class: 'segmento cuatro' }, modos.map(function (m) {
       return h('button', { class: 'seg' + (modoReporte === m[0] ? ' activa' : ''),
         onclick: function () { modoReporte = m[0]; panelReportes(); } }, m[1]);
     }));
@@ -661,6 +674,7 @@
   function panelReportes() {
     if (modoReporte === 'recetas') panelRecetas();
     else if (modoReporte === 'pedidos') panelPedidos('reporte');
+    else if (modoReporte === 'checklists') panelHistorialChecklists('reporte');
     else panelProduccion('reporte');
   }
 
@@ -679,6 +693,175 @@
           h('p', { class: 'suave' }, 'Rinde ' + r.rendimiento + ' porciones · ' +
             r.ingredientes.map(function (x) { return cant(x.cantidad, x.unidad) + ' ' + x.insumo; }).join(', ')));
       }) : vacio('No hay recetas. Se capturan en las hojas recetas y receta_ingredientes.'))));
+  }
+
+  /* --- administración de insumos (solo el administrador) --- */
+  const UNIDADES = ['kg', 'g', 'l', 'ml', 'pieza', 'paquete', 'caja', 'bolsa'];
+
+  function vistaMinimo(i) {
+    const minimo = h('input', { class: 'campo', type: 'text', inputmode: 'decimal', value: String(i.minimo) });
+    marco(h('div', {},
+      h('h2', {}, 'Mínimo de ' + i.nombre),
+      h('p', { class: 'suave' }, 'Ahora hay ' + cant(i.existencia, i.unidad) + ' y el mínimo es ' + cant(i.minimo, i.unidad) +
+        '. Cuando la existencia llegue al mínimo, se avisa.'),
+      h('label', { class: 'suave' }, 'Nuevo mínimo (' + i.unidad + ')'), minimo,
+      h('button', { class: 'btn primario', onclick: async function (ev) {
+        const b = ev.currentTarget;
+        if (minimo.value.trim() === '') { aviso('Escribe el mínimo', 'error'); return; }
+        b.disabled = true;
+        try { await Api.llamar('insumos.minimo', { id: i.id, minimo: numero(minimo.value) }); aviso('Mínimo actualizado', 'ok'); panelInventario(); }
+        catch (e) { aviso(e.message, 'error'); b.disabled = false; if (e.codigo === 'sesion') vistaLogin(); }
+      } }, 'Guardar'),
+      h('button', { class: 'btn texto', onclick: panelInventario }, 'Cancelar')));
+  }
+
+  function vistaNuevoInsumo() {
+    const nombre = h('input', { class: 'campo', type: 'text', maxlength: '40', placeholder: 'Ej. Chile jalapeño', autocomplete: 'off' });
+    const unidad = h('select', { class: 'campo' }, UNIDADES.map(function (u) { return h('option', { value: u }, u); }));
+    const costo = h('input', { class: 'campo', type: 'text', inputmode: 'decimal', placeholder: 'Costo por unidad (pesos)' });
+    const minimo = h('input', { class: 'campo', type: 'text', inputmode: 'decimal', placeholder: 'Mínimo antes de avisar' });
+    const existencia = h('input', { class: 'campo', type: 'text', inputmode: 'decimal', placeholder: 'Cuánto hay ahora (puede ser 0)' });
+    marco(h('div', {},
+      h('h2', {}, 'Insumo nuevo'),
+      h('label', { class: 'suave' }, 'Nombre'), nombre,
+      h('label', { class: 'suave' }, 'Unidad'), unidad,
+      h('label', { class: 'suave' }, 'Costo por unidad'), costo,
+      h('label', { class: 'suave' }, 'Mínimo'), minimo,
+      h('label', { class: 'suave' }, 'Existencia inicial'), existencia,
+      h('button', { class: 'btn primario', onclick: async function (ev) {
+        const b = ev.currentTarget; b.disabled = true;
+        try {
+          await Api.llamar('insumos.crear', { nombre: nombre.value, unidad: unidad.value, costo: numero(costo.value),
+            minimo: numero(minimo.value), existencia: numero(existencia.value) });
+          aviso('Insumo agregado', 'ok'); panelInventario();
+        } catch (e) { aviso(e.message, 'error'); b.disabled = false; if (e.codigo === 'sesion') vistaLogin(); }
+      } }, 'Agregar al inventario'),
+      h('button', { class: 'btn texto', onclick: panelInventario }, 'Cancelar')));
+  }
+
+  /* --- alertas --- */
+  const ICONO_SEV = { alta: '🔴', media: '🟠', baja: '🔵' };
+
+  async function panelAlertas() {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('alertas.lista'); } catch (e) { falloVista(e, panelAlertas); return; }
+    alertasNuevas = d.nuevas;
+    marco(h('div', {},
+      h('h2', {}, 'Alertas'),
+      d.nuevas ? h('button', { class: 'btn', onclick: async function () {
+        try { await Api.llamar('alertas.marcar', { todas: true }); } catch (e) { aviso(e.message, 'error'); }
+        panelAlertas();
+      } }, 'Marcar todas como vistas') : null,
+      h('div', { class: 'lista' }, d.alertas.length ? d.alertas.map(function (a) {
+        return h('div', { class: 'fila-usuario' + (a.estado === 'nueva' ? ' nueva' : '') + (a.estado === 'resuelta' ? ' resuelta' : '') },
+          h('div', { class: 'fila-dos' }, h('strong', {}, (ICONO_SEV[a.severidad] || '') + ' ' + a.hora), h('span', { class: 'suave' }, a.fecha)),
+          h('div', {}, a.mensaje),
+          a.estado !== 'resuelta' ? h('button', { class: 'btn pequeno', onclick: async function () {
+            try { await Api.llamar('alertas.marcar', { id: a.id, estado: 'resuelta' }); panelAlertas(); }
+            catch (e) { aviso(e.message, 'error'); }
+          } }, 'Marcar resuelta') : null);
+      }) : vacio('Sin alertas. Todo en orden.'))));
+  }
+
+  /* --- checklists --- */
+  function nodoPlantillas(lista, volver) {
+    return h('div', { class: 'lista' }, lista.length ? lista.map(function (p) {
+      return h('div', { class: 'fila-usuario' },
+        h('div', { class: 'fila-dos' }, h('strong', {}, p.nombre),
+          h('span', { class: 'insignia ' + (p.hecha ? 'verde' : 'naranja') }, p.hecha ? 'Hecho' : 'Pendiente')),
+        h('div', { class: 'suave' }, p.items.length + ' puntos' + (p.obligatoria_cierre ? ' · obligatorio para cerrar el turno' : '')),
+        h('button', { class: 'btn pequeno', onclick: function () { vistaEjecutarChecklist(p, volver); } }, p.hecha ? 'Hacer de nuevo' : 'Empezar'));
+    }) : vacio('No hay checklists.'));
+  }
+
+  async function panelChecklists() {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('checklists.plantillas'); } catch (e) { falloVista(e, panelChecklists); return; }
+    marco(h('div', {}, selectorModo(), nodoPlantillas(d, panelChecklists),
+      tiene('checklists.revisar') ? h('button', { class: 'btn texto', onclick: function () { panelHistorialChecklists('registro'); } }, 'Ver historial y revisar') : null));
+  }
+
+  function vistaEjecutarChecklist(p, volver) {
+    const valores = {};
+    const controles = p.items.map(function (it) {
+      let control;
+      if (it.tipo_item === 'si_no') {
+        const si = h('button', { class: 'opt', type: 'button' }, 'Sí');
+        const no = h('button', { class: 'opt', type: 'button' }, 'No');
+        const poner = function (v) {
+          valores[it.id] = v;
+          si.classList.toggle('activa', v === 'si');
+          no.classList.toggle('activa', v === 'no');
+        };
+        si.addEventListener('click', function () { poner('si'); });
+        no.addEventListener('click', function () { poner('no'); });
+        control = h('div', { class: 'si-no' }, si, no);
+      } else {
+        const campo = h('input', { class: 'campo', type: 'text', maxlength: '120',
+          inputmode: it.tipo_item === 'numero' ? 'decimal' : 'text', placeholder: it.tipo_item === 'numero' ? 'Número' : 'Escribe aquí' });
+        campo.addEventListener('input', function () { valores[it.id] = campo.value; });
+        control = campo;
+      }
+      const rango = it.tipo_item === 'numero' && (it.min !== null || it.max !== null)
+        ? ' (' + (it.min !== null ? it.min : '…') + ' a ' + (it.max !== null ? it.max : '…') + ')' : '';
+      return h('div', { class: 'item' }, h('div', {}, it.texto + rango + (it.obligatorio ? ' *' : '')), control);
+    });
+    const obs = h('input', { class: 'campo', type: 'text', maxlength: '120', placeholder: 'Observaciones (opcional)' });
+    pantalla(p.nombre, volver, h('div', {}, h('div', { class: 'lista' }, controles), obs,
+      h('button', { class: 'btn primario', onclick: async function (ev) {
+        const b = ev.currentTarget;
+        const falta = p.items.filter(function (it) {
+          return it.obligatorio && (valores[it.id] === undefined || String(valores[it.id]).trim() === '');
+        })[0];
+        if (falta) { aviso('Falta responder: ' + falta.texto, 'error'); return; }
+        b.disabled = true; b.textContent = 'Guardando…';
+        try {
+          const r = await Api.llamar('checklists.ejecutar', { plantilla_id: p.id, observaciones: obs.value,
+            respuestas: p.items.map(function (it) { return { item_id: it.id, valor: valores[it.id] === undefined ? '' : valores[it.id] }; }) });
+          aviso(r.observaciones ? 'Guardado · se avisó de ' + r.observaciones + ' punto(s) a revisar' : 'Checklist guardado', r.observaciones ? '' : 'ok');
+          volver();
+        } catch (e) { aviso(e.message, 'error'); b.disabled = false; b.textContent = 'Terminar'; if (e.codigo === 'sesion') vistaLogin(); }
+      } }, 'Terminar')));
+  }
+
+  async function panelHistorialChecklists(origen) {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('checklists.historial'); }
+    catch (e) { falloVista(e, function () { panelHistorialChecklists(origen); }); return; }
+    marco(h('div', {}, origen === 'reporte' ? selectorReporte() : h('h2', {}, 'Historial de checklists'),
+      h('div', { class: 'lista' }, d.length ? d.map(function (e) {
+        return h('div', { class: 'fila-usuario' },
+          h('div', { class: 'fila-dos' }, h('strong', {}, e.plantilla),
+            h('span', { class: 'insignia ' + (e.observaciones ? 'naranja' : 'verde') }, e.observaciones ? 'Con observaciones' : 'Sin observaciones')),
+          h('div', { class: 'suave' }, e.fecha + ' ' + e.hora + ' · ' + e.usuario + (e.revisado ? ' · revisado por ' + e.revisado_por : '')),
+          h('button', { class: 'btn pequeno', onclick: function () {
+            vistaDetalleChecklist(e.id, function () { panelHistorialChecklists(origen); });
+          } }, 'Ver detalle'));
+      }) : vacio('Aún no hay checklists.')),
+      origen === 'registro' ? h('button', { class: 'btn texto', onclick: panelChecklists }, 'Volver') : null));
+  }
+
+  async function vistaDetalleChecklist(id, volver) {
+    marco(cargando());
+    let d;
+    try { d = await Api.llamar('checklists.detalle', { id: id }); } catch (e) { falloVista(e, volver); return; }
+    marco(h('div', {},
+      h('h2', {}, d.plantilla),
+      h('p', { class: 'suave' }, d.fecha + ' ' + d.hora + ' · ' + d.usuario),
+      h('div', { class: 'bloque' }, d.respuestas.map(function (r) {
+        return h('div', { class: 'renglon' + (r.fuera ? ' mal' : '') }, h('span', {}, r.texto), h('strong', {}, r.valor));
+      })),
+      d.revisado ? h('p', { class: 'suave' }, 'Revisado por ' + d.revisado_por + (d.nota ? ' · ' + d.nota : ''))
+        : (tiene('checklists.revisar') ? h('button', { class: 'btn primario', onclick: async function () {
+          const n = prompt('Nota de revisión (opcional):');
+          if (n === null) return;
+          try { await Api.llamar('checklists.revisar', { id: id, nota: n }); aviso('Marcado como revisado', 'ok'); vistaDetalleChecklist(id, volver); }
+          catch (e) { aviso(e.message, 'error'); }
+        } }, 'Marcar como revisado') : null),
+      h('button', { class: 'btn texto', onclick: volver }, 'Volver')));
   }
 
   /* --- pedidos internos --- */
@@ -808,6 +991,16 @@
       h('div', { class: 'lista' }, d.pedidos.length ? d.pedidos.map(function (p) { return tarjetaPedido(p, vistaPedidosCocina, true); }) : vacio('No hay pedidos.'))));
   }
 
+  async function vistaChecklistsCocina() {
+    const cabecera = h('header', { class: 'barra' }, h('strong', {}, 'Checklists'),
+      h('button', { class: 'btn pequeno', onclick: vistaCocina }, 'Volver'));
+    montar(h('div', { class: 'cocina' }, cabecera, cargando()));
+    let d;
+    try { d = await Api.llamar('checklists.plantillas'); }
+    catch (e) { aviso(e.message, 'error'); if (e.codigo === 'sesion') { vistaLogin(); return; } vistaCocina(); return; }
+    montar(h('div', { class: 'cocina' }, cabecera, nodoPlantillas(d, vistaChecklistsCocina)));
+  }
+
   async function vistaCocina() {
     const cabecera = h('header', { class: 'barra' },
       h('strong', {}, 'Comedor Ingenio'),
@@ -850,7 +1043,8 @@
       h('footer', { class: 'pie' }, 'Hola, ' + usuario.nombre + ' · ',
         h('button', { class: 'btn texto en-linea', onclick: vistaPedirInsumos }, 'Pedir insumos'), ' · ',
         h('button', { class: 'btn texto en-linea', onclick: vistaPedidosCocina },
-          'Pendientes: ' + (ped ? ped.pendientes + ped.porRecibir : 0)))));
+          'Pendientes: ' + (ped ? ped.pendientes + ped.porRecibir : 0)), ' · ',
+        h('button', { class: 'btn texto en-linea', onclick: vistaChecklistsCocina }, 'Checklists'))));
   }
 
   /* ---------- administración (solo socios con permiso de administrador) ---------- */

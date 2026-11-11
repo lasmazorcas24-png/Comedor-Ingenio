@@ -169,3 +169,26 @@ body[data-rol="cocina"] .kg-valor { font-size: 2rem; padding: 2px 0 6px; }
 .campo.corto { width: 96px; min-height: 44px; margin: 0; text-align: right; }
 .segmento.tres { grid-template-columns: repeat(3, 1fr); }
 .fila-usuario .btn.pequeno { margin-top: 6px; }
+
+/* Fase 5: alertas, checklists y administración de insumos */
+.barra-der { display: flex; align-items: center; gap: 10px; }
+.campana { min-height: 40px; min-width: 40px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--borde);
+  background: var(--tarjeta); color: var(--texto); font: inherit; }
+.campana.con { border-color: var(--naranja); color: var(--naranja); font-weight: 700; }
+.fila-usuario.nueva { border-left: 4px solid var(--naranja); }
+.fila-usuario.resuelta { opacity: .55; }
+.segmento.cuatro { grid-template-columns: repeat(4, 1fr); }
+.segmento.cuatro .seg { font-size: .78rem; padding: 0 2px; }
+.item { padding: 10px 12px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; }
+.item .campo { margin: 8px 0 0; }
+.si-no { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.opt { min-height: 48px; border-radius: 12px; border: 2px solid var(--borde); background: var(--fondo); color: var(--texto);
+  font: inherit; font-weight: 700; }
+.opt.activa { border-color: var(--verde); color: var(--verde); }
+.si-no .opt:last-child.activa { border-color: var(--rojo); color: var(--rojo); }
+.campana, .estado { white-space: nowrap; }
+.campana { display: inline-flex; align-items: center; gap: 4px; }
+.barra .estado { font-size: .78rem; }
+.fila-usuario .acciones { flex-wrap: wrap; }
+.fila-usuario .acciones .btn { flex: 1 1 22%; min-width: 0; padding: 8px 4px; font-size: .9rem; }
+.fila-usuario { overflow: hidden; }

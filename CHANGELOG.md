@@ -2,6 +2,7 @@
 
 ## [Sin publicar]
 ### Agregado
+- Fase 5: checklists digitales (apertura, limpieza, control operativo y cierre) con revisión y bloqueo de cierre, centro de alertas con campana y correo para alertas altas, y administración de insumos para el administrador (cambiar mínimos y agregar insumos). Backend 0.6.0 en `Fase5.gs`.
 - Fase 4: inventario con existencias calculadas y alertas de mínimo, recetas con costo por porción y margen (solo socios), descuento automático de insumos por corte y por venta, y pedidos internos (cocina pide, encargada aprueba, rechaza o modifica y registra la recepción). Backend 0.5.0 en `Fase4.gs`.
 - Fase 3: producción en kilos (corte, uso, merma), diferencia uso − ventas con tolerancia configurable, pantalla de cocina rediseñada y vista de producción para encargada y socios (backend 0.4.0 en `Fase3.gs`).
 - Fase 2: turnos, ventas y caja (backend 0.3.0 en `Fase2.gs`; pantallas de registro de ventas, caja, gastos y cierre con conteo ciego). Menú de ejemplo.
